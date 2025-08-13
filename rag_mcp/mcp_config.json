@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chromadb-rag": {
+      "command": "python",
+      "args": ["mcp/server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

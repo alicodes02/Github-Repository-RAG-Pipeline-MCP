@@ -39,8 +39,8 @@ def initialize_github_client():
 
 # Check for GitHub Token
 github_token = os.getenv("GITHUB_TOKEN")
-if not github_token:
-    raise EnvironmentError("GitHub token not found in environment variables")
+""" if not github_token:
+    raise EnvironmentError("GitHub token not found in environment variables") """
 
 # function to load GitHub repository and form chunks
 def load_github_repository(url,branch):
@@ -166,7 +166,69 @@ def create_vector_store(langchain_docs):
     # Persist to disk
     chroma_db.persist()
     print(f"Chunks added successfully.")
+    return chroma_db
 
+
+def load_or_create_vector_store(langchain_docs=None, force_recreate=False):
+    """
+    Load existing ChromaDB or create a new one if it doesn't exist.
+    
+    Args:
+        langchain_docs: Documents to add if creating new database
+        force_recreate: If True, delete existing database and create new one
+    
+    Returns:
+        Chroma database instance
+    """
+    persist_directory = "./chroma_db_hf"
+    
+    # Check if ChromaDB already exists
+    if os.path.exists(persist_directory) and not force_recreate:
+        print(f"📂 Loading existing ChromaDB from {persist_directory}")
+        try:
+            # Load existing ChromaDB
+            chroma_db = Chroma(
+                embedding_function=embedding_model,
+                persist_directory=persist_directory
+            )
+            
+            # Check if the database has documents
+            collection = chroma_db._collection
+            doc_count = collection.count()
+            
+            if doc_count > 0:
+                print(f"✅ Successfully loaded ChromaDB with {doc_count} documents")
+                return chroma_db
+            else:
+                print("⚠️ ChromaDB exists but is empty. Creating new database...")
+                if langchain_docs is None:
+                    raise ValueError("No documents provided to populate empty database")
+        except Exception as e:
+            print(f"⚠️ Error loading ChromaDB: {e}")
+            print("Creating new database...")
+    
+    # Create new ChromaDB if it doesn't exist or if force_recreate is True
+    if langchain_docs is None:
+        raise ValueError("No documents provided to create new database")
+    
+    if force_recreate and os.path.exists(persist_directory):
+        import shutil
+        print(f"🗑️ Removing existing ChromaDB at {persist_directory}")
+        shutil.rmtree(persist_directory)
+    
+    print(f"🔨 Creating new ChromaDB at {persist_directory}")
+    chroma_db = Chroma(
+        embedding_function=embedding_model,
+        persist_directory=persist_directory
+    )
+    
+    print(f"📝 Adding {len(langchain_docs)} documents to ChromaDB...")
+    chroma_db.add_documents(langchain_docs)
+    
+    # Persist to disk
+    chroma_db.persist()
+    print(f"✅ ChromaDB created successfully with {len(langchain_docs)} documents")
+    
     return chroma_db
 
 # Initialize Groq client
@@ -243,25 +305,106 @@ def query_chroma_db(chroma_db):
             print(doc.page_content) 
 
         print("\n🧠 Sending context to Groq LLM...\n")
-        answer = ask_llm_with_context(query, top_docs)
-        print("💡 LLM Answer:\n", answer)
+        # answer = ask_llm_with_context(query, top_docs)
+        # print("💡 LLM Answer:\n", answer)
+
+
+def query_chroma_with_hardcoded(chroma_db, query):
+    """
+    Query ChromaDB with a specific query and return the top reranked chunks.
+    
+    Args:
+        chroma_db: The ChromaDB vector store instance
+        query: The query string to search for
+    
+    Returns:
+        List of top ranked documents with their scores
+    """
+    print(f"\n📝 Querying ChromaDB with: '{query}'")
+    print("=" * 60)
+    
+    # Perform similarity search
+    initial_results = chroma_db.similarity_search(query, k=15)
+    
+    if not initial_results:
+        print("❌ No relevant chunks found.")
+        return []
+    
+    print(f"✅ Found {len(initial_results)} initial chunks")
+    print("\n🔄 Reranking chunks for relevance...")
+    
+    # Prepare pairs for reranking: (query, chunk)
+    rerank_inputs = [[query, doc.page_content] for doc in initial_results]
+    
+    # Get relevance scores from the reranker
+    scores = reranker.predict(rerank_inputs)
+    
+    # Rank and select top 4 most relevant chunks
+    ranked_docs = sorted(zip(initial_results, scores), key=lambda x: x[1], reverse=True)
+    top_docs = ranked_docs[:4]
+    
+    print(f"\n🎯 Top {len(top_docs)} most relevant chunks:")
+    print("=" * 60)
+    
+    for i, (doc, score) in enumerate(top_docs, 1):
+        print(f"\n📄 Chunk {i} (Relevance Score: {score:.4f})")
+        print("-" * 40)
+        print(f"📁 File: {doc.metadata.get('file_path', 'N/A')}")
+        print(f"📦 Repo: {doc.metadata.get('repo_name', 'N/A')}")
+        print(f"\n📝 Content Preview (first 500 chars):")
+        print(textwrap.fill(doc.page_content[:500], width=80))
+        if len(doc.page_content) > 500:
+            print(f"... [{len(doc.page_content) - 500} more characters]")
+        print("-" * 40)
+    
+    print("\n✅ Query completed successfully!")
+    return top_docs
 
 
 if __name__ == "__main__":
 
     #load_dotenv()  # Load environment variables from .env file
-    print("Welcome to the GitHub Codebase Query Assistant! 🤖")
-    print("You can ask questions about the codebase, and I'll do my best to help you.\n")
+    print("Welcome to the GitHub Codebase Query Assistant! 🤖\n")
 
-    github_repo_url = input("Enter the GitHub repository URL")
-    branch_name = input("Enter the branch name (default is 'dev'): ") or "dev"
+    # Check if ChromaDB already exists
+    persist_directory = "./chroma_db_hf"
+    use_existing = False
     
-    chunks = load_github_repository(url=github_repo_url, branch=branch_name)
-    langchain_docs=convert_chunks_to_langchain_docs(all_chunks=chunks)
+    if os.path.exists(persist_directory):
+        print(f"📁 Found existing ChromaDB at {persist_directory}")
+        user_choice = input("Do you want to use the existing database? (y/n, default: y): ").strip().lower()
+        use_existing = user_choice != 'n'
+    
+    if use_existing and os.path.exists(persist_directory):
+        # Load existing ChromaDB without creating new documents
+        chroma_db = load_or_create_vector_store(langchain_docs=None, force_recreate=False)
+    else:
+        # Create new ChromaDB with documents from GitHub
+        print("\n🔄 Creating new vector store from GitHub repository...\n")
+        
+        # Hardcoded GitHub repository URL and branch
+        github_repo_url = "https://github.com/langchain-ai/langchain"  # Example repository
+        branch_name = "master"
+        
+        print(f"Loading repository: {github_repo_url}")
+        print(f"Branch: {branch_name}\n")
+        
+        chunks = load_github_repository(url=github_repo_url, branch=branch_name)
+        langchain_docs = convert_chunks_to_langchain_docs(all_chunks=chunks)
+        
+        # Create or recreate the vector store
+        chroma_db = load_or_create_vector_store(langchain_docs=langchain_docs, force_recreate=True)
 
-    chroma_db = create_vector_store(langchain_docs=langchain_docs)
-
-    query_chroma_db(chroma_db=chroma_db)
+    # Hardcoded query to ChromaDB
+    hardcoded_query = "langchain RAG"
+    
+    # Call the separate function to query ChromaDB
+    top_chunks = query_chroma_with_hardcoded(chroma_db, hardcoded_query)
+    
+    if top_chunks:
+        print(f"\n📊 Successfully retrieved and ranked {len(top_chunks)} chunks from ChromaDB")
+    else:
+        print("\n⚠️ No chunks were retrieved from the query")
 
 
 
