@@ -10,6 +10,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastmcp import FastMCP
+from rag_mcp.logging_config import get_logger
 from rag_mcp.tools import (
     query_chromadb,
     get_chunks,
@@ -21,20 +22,23 @@ from rag_mcp.tools import (
     LoadGithubRepoRequest
 )
 
+# Initialize logger (will use existing configuration)
+logger = get_logger(__name__)
+
+logger.info("Starting MCP Server for ChromaDB RAG Pipeline")
+
 # Initialize FastMCP server
 mcp = FastMCP("ChromaDB RAG Server")
+logger.info("FastMCP server initialized")
 
 # Register tools with the MCP server
 @mcp.tool()
 def query_chromadb_tool(
-    
     query: str,
     top_k: int = 10,
     rerank_top_k: int = 5,
     include_llm_response: bool = False
-    
-    ):
-    
+):
     """
     Query the ChromaDB vector database with semantic search and reranking.
     
@@ -50,14 +54,24 @@ def query_chromadb_tool(
         QueryResponse with the search results and optional LLM response
     """
 
-    request = QueryRequest(
-        query=query,
-        top_k=top_k,
-        rerank_top_k=rerank_top_k,
-        include_llm_response=include_llm_response
-    )
+    logger.info(f"MCP Tool called: query_chromadb_tool - Query: '{query}'")
+    logger.debug(f"Parameters: top_k={top_k}, rerank_top_k={rerank_top_k}, include_llm_response={include_llm_response}")
 
-    return query_chromadb(request)
+    try:
+        request = QueryRequest(
+            query=query,
+            top_k=top_k,
+            rerank_top_k=rerank_top_k,
+            include_llm_response=include_llm_response
+        )
+
+        logger.debug("QueryRequest created, calling query_chromadb")
+        result = query_chromadb(request)
+        logger.info(f"query_chromadb_tool completed: success={result.success}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in query_chromadb_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def get_chunks_tool(request: ChunksRequest):
@@ -73,7 +87,16 @@ def get_chunks_tool(request: ChunksRequest):
     Returns:
         ChunksResponse with the raw chunks
     """
-    return get_chunks(request)
+    logger.info(f"MCP Tool called: get_chunks_tool - Query: '{request.query}'")
+    logger.debug(f"Parameters: top_k={request.top_k}, include_scores={request.include_scores}")
+    
+    try:
+        result = get_chunks(request)
+        logger.info(f"get_chunks_tool completed: success={result.success}, chunks={result.total_chunks}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_chunks_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def get_database_info_tool():
@@ -83,7 +106,15 @@ def get_database_info_tool():
     Returns:
         Dictionary containing database statistics and metadata
     """
-    return get_database_info()
+    logger.info("MCP Tool called: get_database_info_tool")
+    
+    try:
+        result = get_database_info()
+        logger.info(f"get_database_info_tool completed: success={result.get('success', False)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_database_info_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def search_by_file_tool(file_path: str, limit: int = 10):
@@ -97,7 +128,15 @@ def search_by_file_tool(file_path: str, limit: int = 10):
     Returns:
         Dictionary containing the search results
     """
-    return search_by_file(file_path, limit)
+    logger.info(f"MCP Tool called: search_by_file_tool - File: '{file_path}', limit: {limit}")
+    
+    try:
+        result = search_by_file(file_path, limit)
+        logger.info(f"search_by_file_tool completed: success={result.get('success', False)}, chunks={result.get('chunk_count', 0)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in search_by_file_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def load_github_repo(url: str, branch: str = "main"):
@@ -111,10 +150,30 @@ def load_github_repo(url: str, branch: str = "main"):
     Returns:
         LoadGithubRepoResponse with chunk metadata
     """
-    # from rag_mcp.tools import LoadGithubRepoRequest
-    request = LoadGithubRepoRequest(url=url, branch=branch)
-    return load_github_repository_tool(request)
+    logger.info(f"MCP Tool called: load_github_repo - URL: '{url}', Branch: '{branch}'")
+    
+    try:
+        request = LoadGithubRepoRequest(url=url, branch=branch)
+        logger.debug("LoadGithubRepoRequest created, calling load_github_repository_tool")
+        
+        result = load_github_repository_tool(request)
+        logger.info(f"load_github_repo completed: success={result.success}, chunks={result.total_chunks}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in load_github_repo: {e}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
-    # Run the MCP server
-    mcp.run()
+    logger.info("Starting MCP server main execution")
+    try:
+        # Run the MCP server
+        logger.info("Running MCP server...")
+        mcp.run()
+    except KeyboardInterrupt:
+        logger.info("MCP server stopped by user (KeyboardInterrupt)")
+    except Exception as e:
+        logger.error(f"MCP server error: {e}", exc_info=True)
+        raise
+    finally:
+        logger.info("MCP server shutdown")
+        logger.info("MCP server shutdown")
