@@ -106,7 +106,7 @@ def load_github_repo(url: str, branch: str = "main"):
     
     Args:
         url: URL of the GitHub repository to load
-        branch: Branch name to load (defaults to "master")
+        branch: Branch name to load (defaults to "main")
         
     Returns:
         LoadGithubRepoResponse with chunk metadata

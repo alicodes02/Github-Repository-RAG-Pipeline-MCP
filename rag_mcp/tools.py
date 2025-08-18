@@ -14,7 +14,7 @@ db_manager = ChromaDBManager()
 
 # Import the function from main.py
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from main import load_github_repository
+from main import load_github_repository, convert_chunks_to_langchain_docs, load_or_create_vector_store
 
 # Request/Response Models
 class QueryRequest(BaseModel):
@@ -58,6 +58,7 @@ class LoadGithubRepoResponse(BaseModel):
     branch: str
     total_chunks: int
     chunks: List[Dict[str, Any]]
+    chromadb_result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 def query_chromadb(request: QueryRequest) -> QueryResponse:
@@ -217,14 +218,52 @@ def search_by_file(file_path: str, limit: int = 10) -> Dict[str, Any]:
 
 def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRepoResponse:
     """
-    Tool to load a GitHub repository, chunk its files, and return chunk metadata.
+    Tool to load a GitHub repository, chunk its files, convert to LangChain docs, and insert into ChromaDB.
+    
+    This tool:
+    1. Loads and chunks a GitHub repository
+    2. Converts chunks to LangChain Document format
+    3. Adds the documents to ChromaDB vector store
+    4. Returns chunk metadata and ChromaDB insertion results
+    
     Args:
         request: LoadGithubRepoRequest containing repo URL and branch
     Returns:
-        LoadGithubRepoResponse with chunk metadata
+        LoadGithubRepoResponse with chunk metadata and ChromaDB results
     """
     try:
+        # Step 1: Load and chunk GitHub repository
+        print(f"Loading GitHub repository: {request.url}")
         chunks = load_github_repository(url=request.url, branch=request.branch)
+        
+        if not chunks:
+            return LoadGithubRepoResponse(
+                success=False,
+                repo_url=request.url,
+                branch=request.branch,
+                total_chunks=0,
+                chunks=[],
+                error="No chunks were generated from the repository"
+            )
+        
+        # Step 2: Convert chunks to LangChain documents
+        print(f"Converting {len(chunks)} chunks to LangChain documents...")
+        langchain_docs = convert_chunks_to_langchain_docs(chunks)
+        
+        # Step 3: Add documents to ChromaDB using load_or_create_vector_store
+        print("Adding documents to ChromaDB vector store...")
+        chroma_db = load_or_create_vector_store(langchain_docs=langchain_docs, force_recreate=False)
+        
+        # Get ChromaDB statistics
+        doc_count = chroma_db._collection.count() if chroma_db._collection else 0
+        
+        chromadb_result = {
+            "success": True,
+            "total_documents_in_db": doc_count,
+            "documents_added": len(langchain_docs),
+            "message": f"Successfully added {len(langchain_docs)} documents to ChromaDB"
+        }
+        
         return LoadGithubRepoResponse(
             success=True,
             repo_url=request.url,
@@ -233,8 +272,10 @@ def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRep
             chunks=[{
                 "text": chunk["text"],
                 "metadata": chunk["metadata"]
-            } for chunk in chunks]
+            } for chunk in chunks],
+            chromadb_result=chromadb_result
         )
+        
     except Exception as e:
         return LoadGithubRepoResponse(
             success=False,
@@ -242,5 +283,9 @@ def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRep
             branch=request.branch,
             total_chunks=0,
             chunks=[],
+            chromadb_result={
+                "success": False,
+                "error": f"ChromaDB insertion failed: {str(e)}"
+            },
             error=f"Error loading GitHub repository: {str(e)}"
         )

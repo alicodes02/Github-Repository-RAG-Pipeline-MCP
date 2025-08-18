@@ -151,9 +151,10 @@ def convert_chunks_to_langchain_docs(all_chunks):
 
     return langchain_docs
 
-def create_vector_store(langchain_docs):
+def create_vector_store(langchain_docs, persist_directory=None):
     # Set directory for persistent ChromaDB storage
-    persist_directory = "./chroma_db_hf"
+    if persist_directory is None:
+        persist_directory = "./chroma_db_hf"
 
     # Store documents and embeddings into ChromaDB
     chroma_db = Chroma(
@@ -169,22 +170,24 @@ def create_vector_store(langchain_docs):
     return chroma_db
 
 
-def load_or_create_vector_store(langchain_docs=None, force_recreate=False):
+def load_or_create_vector_store(langchain_docs=None, force_recreate=False, persist_directory=None):
     """
     Load existing ChromaDB or create a new one if it doesn't exist.
     
     Args:
         langchain_docs: Documents to add if creating new database
         force_recreate: If True, delete existing database and create new one
+        persist_directory: Custom path for ChromaDB storage (optional)
     
     Returns:
         Chroma database instance
     """
-    persist_directory = "./chroma_db_hf"
+    if persist_directory is None:
+        persist_directory = "./chroma_db_hf"
     
     # Check if ChromaDB already exists
     if os.path.exists(persist_directory) and not force_recreate:
-        print(f"📂 Loading existing ChromaDB from {persist_directory}")
+        print(f"[Loading] Loading existing ChromaDB from {persist_directory}")
         try:
             # Load existing ChromaDB
             chroma_db = Chroma(
@@ -197,14 +200,14 @@ def load_or_create_vector_store(langchain_docs=None, force_recreate=False):
             doc_count = collection.count()
             
             if doc_count > 0:
-                print(f"✅ Successfully loaded ChromaDB with {doc_count} documents")
+                print(f"[SUCCESS] Successfully loaded ChromaDB with {doc_count} documents")
                 return chroma_db
             else:
-                print("⚠️ ChromaDB exists but is empty. Creating new database...")
+                print("[WARNING] ChromaDB exists but is empty. Creating new database...")
                 if langchain_docs is None:
                     raise ValueError("No documents provided to populate empty database")
         except Exception as e:
-            print(f"⚠️ Error loading ChromaDB: {e}")
+            print(f"[ERROR] Error loading ChromaDB: {e}")
             print("Creating new database...")
     
     # Create new ChromaDB if it doesn't exist or if force_recreate is True
@@ -213,21 +216,21 @@ def load_or_create_vector_store(langchain_docs=None, force_recreate=False):
     
     if force_recreate and os.path.exists(persist_directory):
         import shutil
-        print(f"🗑️ Removing existing ChromaDB at {persist_directory}")
+        print(f"[REMOVE] Removing existing ChromaDB at {persist_directory}")
         shutil.rmtree(persist_directory)
     
-    print(f"🔨 Creating new ChromaDB at {persist_directory}")
+    print(f"[CREATE] Creating new ChromaDB at {persist_directory}")
     chroma_db = Chroma(
         embedding_function=embedding_model,
         persist_directory=persist_directory
     )
     
-    print(f"📝 Adding {len(langchain_docs)} documents to ChromaDB...")
+    print(f"[ADD] Adding {len(langchain_docs)} documents to ChromaDB...")
     chroma_db.add_documents(langchain_docs)
     
     # Persist to disk
     chroma_db.persist()
-    print(f"✅ ChromaDB created successfully with {len(langchain_docs)} documents")
+    print(f"[SUCCESS] ChromaDB created successfully with {len(langchain_docs)} documents")
     
     return chroma_db
 
@@ -377,7 +380,7 @@ if __name__ == "__main__":
     
     if use_existing and os.path.exists(persist_directory):
         # Load existing ChromaDB without creating new documents
-        chroma_db = load_or_create_vector_store(langchain_docs=None, force_recreate=False)
+        chroma_db = load_or_create_vector_store(langchain_docs=None, force_recreate=False, persist_directory=persist_directory)
     else:
         # Create new ChromaDB with documents from GitHub
         print("\n🔄 Creating new vector store from GitHub repository...\n")
@@ -393,13 +396,13 @@ if __name__ == "__main__":
         langchain_docs = convert_chunks_to_langchain_docs(all_chunks=chunks)
         
         # Create or recreate the vector store
-        chroma_db = load_or_create_vector_store(langchain_docs=langchain_docs, force_recreate=True)
+        chroma_db = load_or_create_vector_store(langchain_docs=langchain_docs, force_recreate=True, persist_directory=persist_directory)
 
     # Hardcoded query to ChromaDB
-    hardcoded_query = "langchain RAG"
+    query = input("Enter your query: ")
     
     # Call the separate function to query ChromaDB
-    top_chunks = query_chroma_with_hardcoded(chroma_db, hardcoded_query)
+    top_chunks = query_chroma_with_hardcoded(chroma_db, query)
     
     if top_chunks:
         print(f"\n📊 Successfully retrieved and ranked {len(top_chunks)} chunks from ChromaDB")
