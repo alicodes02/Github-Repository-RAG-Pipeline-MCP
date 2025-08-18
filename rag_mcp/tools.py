@@ -6,9 +6,15 @@ Defines all tools exposed by the MCP server
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from .chromadb_operations import ChromaDBManager
+import sys
+import os
 
 # Initialize ChromaDB Manager
 db_manager = ChromaDBManager()
+
+# Import the function from main.py
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from main import load_github_repository
 
 # Request/Response Models
 class QueryRequest(BaseModel):
@@ -38,6 +44,20 @@ class ChunksResponse(BaseModel):
     query: str
     chunks: List[Dict[str, Any]]
     total_chunks: int
+    error: Optional[str] = None
+
+class LoadGithubRepoRequest(BaseModel):
+    """Request model for loading a GitHub repository and chunking its files"""
+    url: str = Field(..., description="GitHub repository URL")
+    branch: str = Field(default="master", description="Branch name to load")
+
+class LoadGithubRepoResponse(BaseModel):
+    """Response model for loaded chunks from GitHub repository"""
+    success: bool
+    repo_url: str
+    branch: str
+    total_chunks: int
+    chunks: List[Dict[str, Any]]
     error: Optional[str] = None
 
 def query_chromadb(request: QueryRequest) -> QueryResponse:
@@ -194,3 +214,33 @@ def search_by_file(file_path: str, limit: int = 10) -> Dict[str, Any]:
             "success": False,
             "error": f"Error searching by file: {str(e)}"
         }
+
+def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRepoResponse:
+    """
+    Tool to load a GitHub repository, chunk its files, and return chunk metadata.
+    Args:
+        request: LoadGithubRepoRequest containing repo URL and branch
+    Returns:
+        LoadGithubRepoResponse with chunk metadata
+    """
+    try:
+        chunks = load_github_repository(url=request.url, branch=request.branch)
+        return LoadGithubRepoResponse(
+            success=True,
+            repo_url=request.url,
+            branch=request.branch,
+            total_chunks=len(chunks),
+            chunks=[{
+                "text": chunk["text"],
+                "metadata": chunk["metadata"]
+            } for chunk in chunks]
+        )
+    except Exception as e:
+        return LoadGithubRepoResponse(
+            success=False,
+            repo_url=request.url,
+            branch=request.branch,
+            total_chunks=0,
+            chunks=[],
+            error=f"Error loading GitHub repository: {str(e)}"
+        )

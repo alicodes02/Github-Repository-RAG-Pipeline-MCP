@@ -15,8 +15,10 @@ from rag_mcp.tools import (
     get_chunks,
     get_database_info,
     search_by_file,
+    load_github_repository_tool,
     QueryRequest,
-    ChunksRequest
+    ChunksRequest,
+    LoadGithubRepoRequest
 )
 
 # Initialize FastMCP server
@@ -24,7 +26,15 @@ mcp = FastMCP("ChromaDB RAG Server")
 
 # Register tools with the MCP server
 @mcp.tool()
-def query_chromadb_tool(request: QueryRequest):
+def query_chromadb_tool(
+    
+    query: str,
+    top_k: int = 10,
+    rerank_top_k: int = 5,
+    include_llm_response: bool = False
+    
+    ):
+    
     """
     Query the ChromaDB vector database with semantic search and reranking.
     
@@ -39,6 +49,14 @@ def query_chromadb_tool(request: QueryRequest):
     Returns:
         QueryResponse with the search results and optional LLM response
     """
+
+    request = QueryRequest(
+        query=query,
+        top_k=top_k,
+        rerank_top_k=rerank_top_k,
+        include_llm_response=include_llm_response
+    )
+
     return query_chromadb(request)
 
 @mcp.tool()
@@ -80,6 +98,22 @@ def search_by_file_tool(file_path: str, limit: int = 10):
         Dictionary containing the search results
     """
     return search_by_file(file_path, limit)
+
+@mcp.tool()
+def load_github_repo(url: str, branch: str = "main"):
+    """
+    Load a GitHub repository into the ChromaDB vector database.
+    
+    Args:
+        url: URL of the GitHub repository to load
+        branch: Branch name to load (defaults to "master")
+        
+    Returns:
+        LoadGithubRepoResponse with chunk metadata
+    """
+    # from rag_mcp.tools import LoadGithubRepoRequest
+    request = LoadGithubRepoRequest(url=url, branch=branch)
+    return load_github_repository_tool(request)
 
 if __name__ == "__main__":
     # Run the MCP server

@@ -19,7 +19,8 @@ class ChromaDBManager:
     
     def __init__(
         self,
-        db_path: str = "./chroma_db_hf",
+        db_path: str = "../chroma_db_hf", #fix path issue for chroma_db_hf earlier it was ./chroma_db_hf which was incorrect
+                                          # I changed it to ../chroma_db_hf (correct path for vector store)
         collection_name: Optional[str] = None,
         embedding_model_name: str = "BAAI/bge-small-en-v1.5",
         reranker_model_name: str = "BAAI/bge-reranker-base"

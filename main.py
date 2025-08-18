@@ -46,7 +46,7 @@ github_token = os.getenv("GITHUB_TOKEN")
 def load_github_repository(url,branch):
 
     github_client = initialize_github_client()
-    download_loader("GithubRepositoryReader")
+    #download_loader("GithubRepositoryReader")
 
     github_url = url
     branch_name = branch
@@ -405,22 +405,3 @@ if __name__ == "__main__":
         print(f"\n📊 Successfully retrieved and ranked {len(top_chunks)} chunks from ChromaDB")
     else:
         print("\n⚠️ No chunks were retrieved from the query")
-
-
-
-
-    
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
