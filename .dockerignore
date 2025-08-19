@@ -1,0 +1,19 @@
+# Ignore Python caches and venv
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Git and IDE
+.git/
+.gitignore
+*.log
+.vscode/
+.idea/
+
+# Local DB and large data (mount as volume if needed)
+chroma_db_hf/
+
+# OS
+.DS_Store

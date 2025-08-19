@@ -1,0 +1,33 @@
+2025-08-19 16:22:25 |     INFO |    logging_config.py:  64 |        setup_logging | Logging initialized. Log file: logs/rag_mcp_20250819_162225.log
+2025-08-19 16:22:25 |     INFO |             tools.py:  16 |             <module> | Initializing MCP Tools Module
+2025-08-19 16:22:25 |     INFO |             tools.py:  36 |             <module> | Creating ChromaDBManager instance
+2025-08-19 16:22:25 |     INFO | chromadb_operations.py:  41 |             __init__ | Initializing ChromaDBManager
+2025-08-19 16:22:25 |     INFO | chromadb_operations.py:  67 |             __init__ | Loading embedding model: BAAI/bge-small-en-v1.5
+2025-08-19 16:22:25 |     INFO | SentenceTransformer.py: 219 |             __init__ | Use pytorch device_name: cpu
+2025-08-19 16:22:25 |     INFO | SentenceTransformer.py: 227 |             __init__ | Load pretrained SentenceTransformer: BAAI/bge-small-en-v1.5
+2025-08-19 16:22:31 |     INFO | chromadb_operations.py:  71 |             __init__ | Embedding model loaded successfully
+2025-08-19 16:22:31 |     INFO | chromadb_operations.py:  74 |             __init__ | Loading reranker model: BAAI/bge-reranker-base
+2025-08-19 16:22:34 |     INFO |      CrossEncoder.py: 222 |             __init__ | Use pytorch device: cpu
+2025-08-19 16:22:34 |     INFO | chromadb_operations.py:  76 |             __init__ | Reranker model loaded successfully
+2025-08-19 16:22:34 |     INFO | chromadb_operations.py:  81 |             __init__ | Initializing Groq client
+2025-08-19 16:22:34 |     INFO | chromadb_operations.py:  83 |             __init__ | Groq client initialized successfully
+2025-08-19 16:22:34 |     INFO | chromadb_operations.py:  88 |             __init__ | Loading ChromaDB instance
+2025-08-19 16:22:35 |     INFO |           posthog.py:  22 |             __init__ | Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-08-19 16:22:35 |     INFO | chromadb_operations.py: 129 |      _load_chroma_db | ChromaDB loaded with 2365 documents
+2025-08-19 16:22:35 |     INFO | chromadb_operations.py:  92 |             __init__ | ChromaDBManager initialization completed successfully
+2025-08-19 16:22:36 |     INFO |         ingestion.py:  28 |             <module> | Initializing ingestion module
+2025-08-19 16:22:36 |     INFO |             tools.py:  45 |             <module> | Ingestion utilities imported from rag_mcp.ingestion
+2025-08-19 16:22:36 |     INFO |             tools.py: 359 |             <module> | MCP Tools Module initialization completed
+2025-08-19 16:22:36 |     INFO |            server.py:  29 |             <module> | Starting MCP Server for ChromaDB RAG Pipeline
+2025-08-19 16:22:36 |     INFO |            server.py:  33 |             <module> | FastMCP server initialized
+2025-08-19 16:22:36 |     INFO |            server.py: 168 |             <module> | Starting MCP server main execution
+2025-08-19 16:22:36 |     INFO |            server.py: 179 |             <module> | No --github-token provided; will use environment if present
+2025-08-19 16:22:36 |     INFO |            server.py: 184 |             <module> | Running MCP server...
+2025-08-19 16:22:36 |     INFO | streamable_http_manager.py: 110 |                  run | StreamableHTTP session manager started
+2025-08-19 16:24:01 |     INFO | streamable_http_manager.py: 233 | _handle_stateful_request | Created new transport with session ID: 59a264c73b9a4446be6aa44f5ffae643
+2025-08-19 16:24:01 |     INFO | streamable_http_manager.py: 233 | _handle_stateful_request | Created new transport with session ID: 5e80613e37d942e78c1eacffc5a2d13b
+2025-08-19 16:24:01 |     INFO | streamable_http_manager.py: 233 | _handle_stateful_request | Created new transport with session ID: da9182dcb00341b9bc9bb11cac7134ab
+2025-08-19 16:24:01 |     INFO | streamable_http_manager.py: 233 | _handle_stateful_request | Created new transport with session ID: 7f10ada23c6944428b34057461edcb12
+2025-08-19 18:43:33 |     INFO | streamable_http_manager.py: 114 |                  run | StreamableHTTP session manager shutting down
+2025-08-19 18:43:33 |     INFO |            server.py: 187 |             <module> | MCP server stopped by user (KeyboardInterrupt)
+2025-08-19 18:43:33 |     INFO |            server.py: 192 |             <module> | MCP server shutdown

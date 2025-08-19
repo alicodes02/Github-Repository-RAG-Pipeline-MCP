@@ -1,9 +1,24 @@
+# Core LlamaIndex
 llama-index
 llama-index-readers-github
 llama-index-core>=0.10.0
+
+# LangChain ecosystem
 langchain
-sentence-transformers
 langchain-community
+
+# Vector DB
 chromadb
+
+# Embeddings / Models
+sentence-transformers
+
+# Providers
 groq
+
+# FastMCP
 fastmcp
+
+# CPU-only PyTorch (from official index)
+torch==2.4.0+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
