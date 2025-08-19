@@ -5,6 +5,7 @@ Handles all ChromaDB-related operations including loading, querying, and reranki
 
 import os
 from typing import List, Dict, Any, Optional
+from langchain.schema import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from sentence_transformers import CrossEncoder
@@ -346,6 +347,55 @@ class ChromaDBManager:
             return {
                 "exists": False,
                 "error": f"Error getting database info: {str(e)}"
+            }
+    
+    def add_documents(self, langchain_docs: List[Document]) -> Dict[str, Any]:
+        """
+        Add LangChain Document objects to ChromaDB, creating the DB if needed.
+        Returns insertion statistics.
+        """
+        logger.info(f"Adding {len(langchain_docs)} documents to ChromaDB at {self.db_path}")
+        try:
+            # Ensure Chroma instance exists (create if missing or previously empty)
+            if not self.chroma_db:
+                logger.debug("ChromaDB not loaded or empty. Creating new Chroma instance.")
+                if self.collection_name:
+                    self.chroma_db = Chroma(
+                        collection_name=self.collection_name,
+                        embedding_function=self.embedding_model,
+                        persist_directory=self.db_path,
+                    )
+                else:
+                    self.chroma_db = Chroma(
+                        embedding_function=self.embedding_model,
+                        persist_directory=self.db_path,
+                    )
+            before_count = 0
+            try:
+                before_count = self.chroma_db._collection.count()
+            except Exception:
+                logger.debug("Unable to read initial document count; defaulting to 0")
+            
+            logger.debug("Adding documents to Chroma and persisting")
+            self.chroma_db.add_documents(langchain_docs)
+            self.chroma_db.persist()
+            
+            after_count = self.chroma_db._collection.count()
+            added = after_count - before_count if after_count >= before_count else len(langchain_docs)
+            logger.info(f"ChromaDB updated: before={before_count}, after={after_count}, added={added}")
+            
+            return {
+                "success": True,
+                "database_path": self.db_path,
+                "before_count": before_count,
+                "after_count": after_count,
+                "documents_added": added,
+            }
+        except Exception as e:
+            logger.error(f"Error adding documents to ChromaDB: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Error adding documents: {str(e)}"
             }
     
     def build_context(self, chunks: List[Dict]) -> str:

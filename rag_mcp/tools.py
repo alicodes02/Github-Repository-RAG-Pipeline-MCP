@@ -36,12 +36,13 @@ def get_project_db_path():
 logger.info("Creating ChromaDBManager instance")
 db_manager = ChromaDBManager(db_path=get_project_db_path())
 
-# Import the function from main.py
-logger.debug("Adding parent directory to Python path")
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from main import load_github_repository, convert_chunks_to_langchain_docs, load_or_create_vector_store
+# Use ingestion utilities inside package instead of main.py
+from .ingestion import (
+    load_github_repository,
+    convert_chunks_to_langchain_docs,
+)
 
-logger.info("Successfully imported functions from main.py")
+logger.info("Ingestion utilities imported from rag_mcp.ingestion")
 
 # Request/Response Models
 class QueryRequest(BaseModel):
@@ -297,7 +298,12 @@ def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRep
     try:
         # Step 1: Load and chunk GitHub repository
         logger.info(f"Step 1: Loading GitHub repository: {request.url}")
-        chunks = load_github_repository(url=request.url, branch=request.branch)
+        github_token = os.getenv("GITHUB_TOKEN")
+        if github_token:
+            logger.info("Using GitHub token from environment for ingestion")
+        else:
+            logger.warning("GITHUB_TOKEN not set; proceeding without authentication (may hit API limits)")
+        chunks = load_github_repository(url=request.url, branch=request.branch, github_token=github_token)
         
         if not chunks:
             logger.error("No chunks were generated from the repository")
@@ -317,22 +323,10 @@ def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRep
         langchain_docs = convert_chunks_to_langchain_docs(chunks)
         logger.info(f"Successfully converted to {len(langchain_docs)} LangChain documents")
         
-        # Step 3: Add documents to ChromaDB using consistent path
-        logger.info("Step 3: Adding documents to ChromaDB vector store...")
-        db_path = get_project_db_path()
-        logger.info(f"Using database path: {db_path}")
-        chroma_db = load_or_create_vector_store(langchain_docs=langchain_docs, force_recreate=False, persist_directory=db_path, add_to_existing=True)
-        
-        # Get ChromaDB statistics
-        doc_count = chroma_db._collection.count() if chroma_db._collection else 0
-        logger.info(f"ChromaDB now contains {doc_count} total documents")
-        
-        chromadb_result = {
-            "success": True,
-            "total_documents_in_db": doc_count,
-            "documents_added": len(langchain_docs),
-            "message": f"Successfully added {len(langchain_docs)} documents to ChromaDB at {db_path}"
-        }
+        # Step 3: Add documents to ChromaDB using manager
+        logger.info("Step 3: Adding documents to ChromaDB vector store via ChromaDBManager...")
+        insertion_result = db_manager.add_documents(langchain_docs)
+        chromadb_result = insertion_result
         
         logger.info("GitHub repository loading completed successfully")
         return LoadGithubRepoResponse(

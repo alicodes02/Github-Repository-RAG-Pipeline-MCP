@@ -6,6 +6,7 @@ This server provides tools to query a ChromaDB vector database
 
 import sys
 import os
+import argparse
 # Add parent directory to path to import from root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -165,6 +166,19 @@ def load_github_repo(url: str, branch: str = "main"):
 
 if __name__ == "__main__":
     logger.info("Starting MCP server main execution")
+    # Parse optional CLI for GitHub token (tolerate unknown args due to fastmcp)
+    try:
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("--github-token", dest="github_token", default=None)
+        # Ignore unknown args so FastMCP's own args don't break us
+        args, _unknown = parser.parse_known_args(sys.argv[1:])
+        if args.github_token:
+            os.environ["GITHUB_TOKEN"] = args.github_token
+            logger.info("GITHUB_TOKEN set from CLI argument")
+        else:
+            logger.info("No --github-token provided; will use environment if present")
+    except Exception as e:
+        logger.warning(f"Failed to parse CLI args for github token: {e}")
     try:
         # Run the MCP server
         logger.info("Running MCP server...")
