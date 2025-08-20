@@ -6,9 +6,43 @@ Defines all tools exposed by the MCP server
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from .chromadb_operations import ChromaDBManager
+from .logging_config import get_logger
+import sys
+import os
 
-# Initialize ChromaDB Manager
-db_manager = ChromaDBManager()
+# Initialize logger (will use existing configuration)
+logger = get_logger(__name__)
+
+logger.info("Initializing MCP Tools Module")
+
+# Add helper function to get consistent DB path
+def get_project_db_path():
+    """Get the absolute path to the ChromaDB in the project root directory"""
+    # Get the parent directory of rag_mcp (project root)
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # rag_mcp directory
+    project_root = os.path.dirname(current_dir)  # parent directory (project root)
+    default_db_path = os.path.join(project_root, "chroma_db_hf")
+    
+    # Check for environment variable first
+    db_path = os.getenv("DB_PATH", default_db_path)
+    
+    # If relative path, make it relative to project root
+    if not os.path.isabs(db_path):
+        db_path = os.path.join(project_root, db_path)
+    
+    return os.path.abspath(db_path)
+
+# Initialize ChromaDB Manager with explicit path
+logger.info("Creating ChromaDBManager instance")
+db_manager = ChromaDBManager(db_path=get_project_db_path())
+
+# Use ingestion utilities inside package instead of main.py
+from .ingestion import (
+    load_github_repository,
+    convert_chunks_to_langchain_docs,
+)
+
+logger.info("Ingestion utilities imported from rag_mcp.ingestion")
 
 # Request/Response Models
 class QueryRequest(BaseModel):
@@ -40,6 +74,21 @@ class ChunksResponse(BaseModel):
     total_chunks: int
     error: Optional[str] = None
 
+class LoadGithubRepoRequest(BaseModel):
+    """Request model for loading a GitHub repository and chunking its files"""
+    url: str = Field(..., description="GitHub repository URL")
+    branch: str = Field(default="master", description="Branch name to load")
+
+class LoadGithubRepoResponse(BaseModel):
+    """Response model for loaded chunks from GitHub repository"""
+    success: bool
+    repo_url: str
+    branch: str
+    total_chunks: int
+    chunks: List[Dict[str, Any]]
+    chromadb_result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
 def query_chromadb(request: QueryRequest) -> QueryResponse:
     """
     Query the ChromaDB vector database with semantic search and reranking.
@@ -55,8 +104,11 @@ def query_chromadb(request: QueryRequest) -> QueryResponse:
     Returns:
         QueryResponse with the search results and optional LLM response
     """
+    logger.info(f"Processing ChromaDB query request - Query: '{request.query}', top_k: {request.top_k}, rerank_top_k: {request.rerank_top_k}")
+    
     try:
         if not db_manager.chroma_db:
+            logger.error("ChromaDB not available for querying")
             return QueryResponse(
                 success=False,
                 query=request.query,
@@ -64,10 +116,12 @@ def query_chromadb(request: QueryRequest) -> QueryResponse:
                 error="ChromaDB not found or empty. Please ensure the database exists at ./chroma_db_hf"
             )
         
+        logger.debug("ChromaDB is available, performing similarity search")
         # Perform similarity search
         chunks = db_manager.query_similarity(request.query, request.top_k)
         
         if not chunks:
+            logger.warning(f"No results found for query: '{request.query}'")
             return QueryResponse(
                 success=True,
                 query=request.query,
@@ -75,9 +129,11 @@ def query_chromadb(request: QueryRequest) -> QueryResponse:
                 error="No results found for the query"
             )
         
+        logger.info(f"Found {len(chunks)} chunks, proceeding with reranking")
         # Rerank the chunks
         ranked_chunks = db_manager.rerank_chunks(request.query, chunks, request.rerank_top_k)
         
+        logger.info(f"Reranking completed, returning {len(ranked_chunks)} chunks")
         # Prepare response
         response = QueryResponse(
             success=True,
@@ -87,12 +143,16 @@ def query_chromadb(request: QueryRequest) -> QueryResponse:
         
         # Generate LLM response if requested
         if request.include_llm_response:
+            logger.info("LLM response requested, generating response")
             llm_response = db_manager.generate_llm_response(request.query, ranked_chunks)
             response.llm_response = llm_response
+            logger.info("LLM response generated and added to query result")
         
+        logger.info("ChromaDB query completed successfully")
         return response
         
     except Exception as e:
+        logger.error(f"Error in query_chromadb: {e}", exc_info=True)
         return QueryResponse(
             success=False,
             query=request.query,
@@ -113,8 +173,11 @@ def get_chunks(request: ChunksRequest) -> ChunksResponse:
     Returns:
         ChunksResponse with the raw chunks
     """
+    logger.info(f"Processing get_chunks request - Query: '{request.query}', top_k: {request.top_k}, include_scores: {request.include_scores}")
+    
     try:
         if not db_manager.chroma_db:
+            logger.error("ChromaDB not available for getting chunks")
             return ChunksResponse(
                 success=False,
                 query=request.query,
@@ -123,12 +186,16 @@ def get_chunks(request: ChunksRequest) -> ChunksResponse:
                 error="ChromaDB not found or empty. Please ensure the database exists at ./chroma_db_hf"
             )
         
+        logger.debug("ChromaDB available, retrieving chunks")
         # Get chunks with or without scores
         if request.include_scores:
+            logger.debug("Retrieving chunks with similarity scores")
             chunks = db_manager.query_with_scores(request.query, request.top_k)
         else:
+            logger.debug("Retrieving chunks without similarity scores")
             chunks = db_manager.query_similarity(request.query, request.top_k)
         
+        logger.info(f"Successfully retrieved {len(chunks)} chunks")
         return ChunksResponse(
             success=True,
             query=request.query,
@@ -137,6 +204,7 @@ def get_chunks(request: ChunksRequest) -> ChunksResponse:
         )
         
     except Exception as e:
+        logger.error(f"Error in get_chunks: {e}", exc_info=True)
         return ChunksResponse(
             success=False,
             query=request.query,
@@ -152,11 +220,20 @@ def get_database_info() -> Dict[str, Any]:
     Returns:
         Dictionary containing database statistics and metadata
     """
+    logger.info("Retrieving database information")
+    
     try:
         info = db_manager.get_database_info()
         info["success"] = info.get("exists", False)
+        
+        if info["success"]:
+            logger.info(f"Database info retrieved successfully: {info['document_count']} documents")
+        else:
+            logger.warning("Database info indicates database does not exist or is empty")
+        
         return info
     except Exception as e:
+        logger.error(f"Error getting database info: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Error getting database info: {str(e)}"
@@ -173,15 +250,20 @@ def search_by_file(file_path: str, limit: int = 10) -> Dict[str, Any]:
     Returns:
         Dictionary containing the search results
     """
+    logger.info(f"Searching for chunks by file - File: '{file_path}', limit: {limit}")
+    
     try:
         if not db_manager.chroma_db:
+            logger.error("ChromaDB not available for file search")
             return {
                 "success": False,
                 "error": "ChromaDB not found or empty"
             }
         
+        logger.debug("ChromaDB available, performing file search")
         chunks = db_manager.search_by_file(file_path, limit)
         
+        logger.info(f"File search completed: found {len(chunks)} chunks for file '{file_path}'")
         return {
             "success": True,
             "file_path": file_path,
@@ -190,7 +272,88 @@ def search_by_file(file_path: str, limit: int = 10) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        logger.error(f"Error in search_by_file: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Error searching by file: {str(e)}"
         }
+
+def load_github_repository_tool(request: LoadGithubRepoRequest) -> LoadGithubRepoResponse:
+    """
+    Tool to load a GitHub repository, chunk its files, convert to LangChain docs, and insert into ChromaDB.
+    
+    This tool:
+    1. Loads and chunks a GitHub repository
+    2. Converts chunks to LangChain Document format
+    3. Adds the documents to ChromaDB vector store
+    4. Returns chunk metadata and ChromaDB insertion results
+    
+    Args:
+        request: LoadGithubRepoRequest containing repo URL and branch
+    Returns:
+        LoadGithubRepoResponse with chunk metadata and ChromaDB results
+    """
+    logger.info(f"Processing load_github_repository_tool request - URL: {request.url}, Branch: {request.branch}")
+    
+    try:
+        # Step 1: Load and chunk GitHub repository
+        logger.info(f"Step 1: Loading GitHub repository: {request.url}")
+        github_token = os.getenv("GITHUB_TOKEN")
+        if github_token:
+            logger.info("Using GitHub token from environment for ingestion")
+        else:
+            logger.warning("GITHUB_TOKEN not set; proceeding without authentication (may hit API limits)")
+        chunks = load_github_repository(url=request.url, branch=request.branch, github_token=github_token)
+        
+        if not chunks:
+            logger.error("No chunks were generated from the repository")
+            return LoadGithubRepoResponse(
+                success=False,
+                repo_url=request.url,
+                branch=request.branch,
+                total_chunks=0,
+                chunks=[],
+                error="No chunks were generated from the repository"
+            )
+        
+        logger.info(f"Successfully generated {len(chunks)} chunks from repository")
+        
+        # Step 2: Convert chunks to LangChain documents
+        logger.info(f"Step 2: Converting {len(chunks)} chunks to LangChain documents...")
+        langchain_docs = convert_chunks_to_langchain_docs(chunks)
+        logger.info(f"Successfully converted to {len(langchain_docs)} LangChain documents")
+        
+        # Step 3: Add documents to ChromaDB using manager
+        logger.info("Step 3: Adding documents to ChromaDB vector store via ChromaDBManager...")
+        insertion_result = db_manager.add_documents(langchain_docs)
+        chromadb_result = insertion_result
+        
+        logger.info("GitHub repository loading completed successfully")
+        return LoadGithubRepoResponse(
+            success=True,
+            repo_url=request.url,
+            branch=request.branch,
+            total_chunks=len(chunks),
+            chunks=[{
+                "text": chunk["text"],
+                "metadata": chunk["metadata"]
+            } for chunk in chunks],
+            chromadb_result=chromadb_result
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in load_github_repository_tool: {e}", exc_info=True)
+        return LoadGithubRepoResponse(
+            success=False,
+            repo_url=request.url,
+            branch=request.branch,
+            total_chunks=0,
+            chunks=[],
+            chromadb_result={
+                "success": False,
+                "error": f"ChromaDB insertion failed: {str(e)}"
+            },
+            error=f"Error loading GitHub repository: {str(e)}"
+        )
+
+logger.info("MCP Tools Module initialization completed")

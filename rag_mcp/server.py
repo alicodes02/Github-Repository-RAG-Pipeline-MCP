@@ -6,25 +6,40 @@ This server provides tools to query a ChromaDB vector database
 
 import sys
 import os
+import argparse
 # Add parent directory to path to import from root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastmcp import FastMCP
+from rag_mcp.logging_config import get_logger
 from rag_mcp.tools import (
     query_chromadb,
     get_chunks,
     get_database_info,
     search_by_file,
+    load_github_repository_tool,
     QueryRequest,
-    ChunksRequest
+    ChunksRequest,
+    LoadGithubRepoRequest
 )
+
+# Initialize logger (will use existing configuration)
+logger = get_logger(__name__)
+
+logger.info("Starting MCP Server for ChromaDB RAG Pipeline")
 
 # Initialize FastMCP server
 mcp = FastMCP("ChromaDB RAG Server")
+logger.info("FastMCP server initialized")
 
 # Register tools with the MCP server
 @mcp.tool()
-def query_chromadb_tool(request: QueryRequest):
+def query_chromadb_tool(
+    query: str,
+    top_k: int = 10,
+    rerank_top_k: int = 5,
+    include_llm_response: bool = False
+):
     """
     Query the ChromaDB vector database with semantic search and reranking.
     
@@ -42,7 +57,25 @@ def query_chromadb_tool(request: QueryRequest):
     Returns:
         QueryResponse with the search results and optional LLM response
     """
-    return query_chromadb(request)
+
+    logger.info(f"MCP Tool called: query_chromadb_tool - Query: '{query}'")
+    logger.debug(f"Parameters: top_k={top_k}, rerank_top_k={rerank_top_k}, include_llm_response={include_llm_response}")
+
+    try:
+        request = QueryRequest(
+            query=query,
+            top_k=top_k,
+            rerank_top_k=rerank_top_k,
+            include_llm_response=include_llm_response
+        )
+
+        logger.debug("QueryRequest created, calling query_chromadb")
+        result = query_chromadb(request)
+        logger.info(f"query_chromadb_tool completed: success={result.success}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in query_chromadb_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def get_chunks_tool(
@@ -90,7 +123,15 @@ def get_database_info_tool():
     Returns:
         Dictionary containing database statistics and metadata
     """
-    return get_database_info()
+    logger.info("MCP Tool called: get_database_info_tool")
+    
+    try:
+        result = get_database_info()
+        logger.info(f"get_database_info_tool completed: success={result.get('success', False)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_database_info_tool: {e}", exc_info=True)
+        raise
 
 @mcp.tool()
 def search_by_file_tool(file_path: str, limit: int = 10):
@@ -104,7 +145,40 @@ def search_by_file_tool(file_path: str, limit: int = 10):
     Returns:
         Dictionary containing the search results
     """
-    return search_by_file(file_path, limit)
+    logger.info(f"MCP Tool called: search_by_file_tool - File: '{file_path}', limit: {limit}")
+    
+    try:
+        result = search_by_file(file_path, limit)
+        logger.info(f"search_by_file_tool completed: success={result.get('success', False)}, chunks={result.get('chunk_count', 0)}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in search_by_file_tool: {e}", exc_info=True)
+        raise
+
+@mcp.tool()
+def load_github_repo(url: str, branch: str = "main"):
+    """
+    Load a GitHub repository into the ChromaDB vector database.
+    
+    Args:
+        url: URL of the GitHub repository to load
+        branch: Branch name to load (defaults to "main")
+        
+    Returns:
+        LoadGithubRepoResponse with chunk metadata
+    """
+    logger.info(f"MCP Tool called: load_github_repo - URL: '{url}', Branch: '{branch}'")
+    
+    try:
+        request = LoadGithubRepoRequest(url=url, branch=branch)
+        logger.debug("LoadGithubRepoRequest created, calling load_github_repository_tool")
+        
+        result = load_github_repository_tool(request)
+        logger.info(f"load_github_repo completed: success={result.success}, chunks={result.total_chunks}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in load_github_repo: {e}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     logger.info("Starting MCP server main execution")
