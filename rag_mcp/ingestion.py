@@ -131,6 +131,8 @@ def load_github_repository(url: str, branch: str, github_token: str | None = Non
                     metadata["signature"] = chunk_info["signature"]
                     metadata["docstring"] = chunk_info["docstring"]
                     metadata["line_count"] = chunk_info["line_count"]
+                    metadata["repo_link"] = url
+                    
 
                     all_chunks.append({
                         "text": chunk_info["text"],
