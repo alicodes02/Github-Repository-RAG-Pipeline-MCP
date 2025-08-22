@@ -14,12 +14,10 @@ from fastmcp import FastMCP
 from rag_mcp.logging_config import get_logger
 from rag_mcp.tools import (
     query_chromadb,
-    get_chunks,
     get_database_info,
     search_by_file,
     load_github_repository_tool,
     QueryRequest,
-    ChunksRequest,
     LoadGithubRepoRequest
 )
 
@@ -77,43 +75,6 @@ def query_chromadb_tool(
         logger.error(f"Error in query_chromadb_tool: {e}", exc_info=True)
         raise
 
-@mcp.tool()
-def get_chunks_tool(
-    query: str,
-    top_k: int = 10,
-    include_scores: bool = True # Change to individual params to solve $refs resolution issue
-):
-    """
-    Get raw chunks from ChromaDB without reranking.
-    
-    This tool retrieves chunks based on semantic similarity without applying
-    any reranking. Useful for getting more results or when reranking is not needed.
-    
-    Args:
-        query: The query to search for in the ChromaDB
-        top_k: Number of top results to retrieve (default: 10)
-        include_scores: Whether to include similarity scores (default: True)
-        
-    Returns:
-        ChunksResponse with the raw chunks
-    """
-    logger.info(f"MCP Tool called: get_chunks_tool - Query: '{query}'")
-    logger.debug(f"Parameters: top_k={top_k}, include_scores={include_scores}")
-    
-    try:
-        # Create the request object from individual parameters
-        request = ChunksRequest(
-            query=query,
-            top_k=top_k,
-            include_scores=include_scores
-        )
-        
-        result = get_chunks(request)
-        logger.info(f"get_chunks_tool completed: success={result.success}, chunks={result.total_chunks}")
-        return result
-    except Exception as e:
-        logger.error(f"Error in get_chunks_tool: {e}", exc_info=True)
-        raise
 
 @mcp.tool()
 def get_database_info_tool():
