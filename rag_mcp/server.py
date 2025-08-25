@@ -36,7 +36,6 @@ def query_chromadb_tool(
     query: str,
     top_k: int = 10,
     rerank_top_k: int = 5,
-    include_llm_response: bool = False
 ):
     """
     Query the ChromaDB vector database with semantic search and reranking.

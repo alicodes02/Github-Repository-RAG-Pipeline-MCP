@@ -5,12 +5,11 @@ A FastMCP server that exposes tools to ingest GitHub repositories into a ChromaD
 ## Tools (exposed by `rag_mcp/server.py`)
 
 - __query_chromadb_tool__
-  - Purpose: Semantic search + cross-encoder rerank; optional LLM answer.
+  - Purpose: Semantic search + cross-encoder rerank.
   - Params:
     - `query: str`
     - `top_k: int = 10` (initial retrieval)
     - `rerank_top_k: int = 5` (final results)
-    - `include_llm_response: bool = False`
 
 - __get_chunks_tool__
   - Purpose: Raw semantic search results from ChromaDB without reranking.
@@ -50,7 +49,6 @@ A FastMCP server that exposes tools to ingest GitHub repositories into a ChromaD
 
 - __DB_PATH__ (optional): Path to the ChromaDB persist directory. Defaults to a project-root folder `./chroma_db_hf`.
 - __GITHUB_TOKEN__ (optional but recommended): Ingestion via GitHub API. Can also be passed at runtime via `-- --github-token <TOKEN>`.
-- __GROQ_API_KEY__ (optional): Enables LLM answer generation in `query_chromadb_tool` when `include_llm_response=True`.
 
 You can place these in a `.env` file or export them in your shell before running the server.
 
