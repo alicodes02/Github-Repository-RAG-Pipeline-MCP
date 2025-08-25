@@ -50,21 +50,19 @@ def query_chromadb_tool(
         query: The query to search for in the ChromaDB
         top_k: Number of top results to retrieve before reranking (default: 10)
         rerank_top_k: Number of top results to return after reranking (default: 5)
-        include_llm_response: Whether to include an LLM-generated response based on the retrieved context (default: False)
         
     Returns:
         QueryResponse with the search results and optional LLM response
     """
 
     logger.info(f"MCP Tool called: query_chromadb_tool - Query: '{query}'")
-    logger.debug(f"Parameters: top_k={top_k}, rerank_top_k={rerank_top_k}, include_llm_response={include_llm_response}")
+    logger.debug(f"Parameters: top_k={top_k}, rerank_top_k={rerank_top_k}")
 
     try:
         request = QueryRequest(
             query=query,
             top_k=top_k,
             rerank_top_k=rerank_top_k,
-            include_llm_response=include_llm_response
         )
 
         logger.debug("QueryRequest created, calling query_chromadb")

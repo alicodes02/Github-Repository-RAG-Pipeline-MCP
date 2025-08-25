@@ -50,7 +50,6 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="The query to search for in the ChromaDB")
     top_k: int = Field(default=10, description="Number of top results to retrieve before reranking")
     rerank_top_k: int = Field(default=5, description="Number of top results to return after reranking")
-    include_llm_response: bool = Field(default=False, description="Whether to include an LLM-generated response based on the retrieved context")
 
 class ChunksRequest(BaseModel):
     """Request model for getting raw chunks without reranking"""
@@ -140,13 +139,6 @@ def query_chromadb(request: QueryRequest) -> QueryResponse:
             query=request.query,
             results=ranked_chunks
         )
-        
-        # Generate LLM response if requested
-        if request.include_llm_response:
-            logger.info("LLM response requested, generating response")
-            llm_response = db_manager.generate_llm_response(request.query, ranked_chunks)
-            response.llm_response = llm_response
-            logger.info("LLM response generated and added to query result")
         
         logger.info("ChromaDB query completed successfully")
         return response
